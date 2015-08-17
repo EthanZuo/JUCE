@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the juce_core module of the JUCE library.
-   Copyright (c) 2013 - Raw Material Software Ltd.
+   Copyright (c) 2015 - ROLI Ltd.
 
    Permission to use, copy, modify, and/or distribute this software for any purpose with
    or without fee is hereby granted, provided that the above copyright notice and this
@@ -321,44 +321,45 @@ namespace SocketHelpers
                                const int portNumber,
                                const int timeOutMillisecs) noexcept
     {
-        if (struct addrinfo* info = getAddressInfo (false, hostName, portNumber))
+        struct addrinfo* info = getAddressInfo (false, hostName, portNumber);
+
+        if (info == nullptr)
+            return false;
+
+        if (handle < 0)
+            handle = (int) socket (info->ai_family, info->ai_socktype, 0);
+
+        if (handle < 0)
         {
-            if (handle < 0)
-                handle = (int) socket (info->ai_family, info->ai_socktype, 0);
-
-            if (handle < 0)
-            {
-                freeaddrinfo (info);
-                return false;
-            }
-
-            setSocketBlockingState (handle, false);
-            const int result = ::connect (handle, info->ai_addr, (socklen_t) info->ai_addrlen);
             freeaddrinfo (info);
-
-            if (result < 0)
-            {
-               #if JUCE_WINDOWS
-                if (result == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
-               #else
-                if (errno == EINPROGRESS)
-               #endif
-                    {
-                        if (waitForReadiness (handle, readLock, false, timeOutMillisecs) != 1)
-                        {
-                            setSocketBlockingState (handle, true);
-                            return false;
-                        }
-                    }
-            }
-
-            setSocketBlockingState (handle, true);
-            resetSocketOptions (handle, false, false);
-
-            return true;
+            return false;
         }
 
-        return false;
+        setSocketBlockingState (handle, false);
+        const int result = ::connect (handle, info->ai_addr, (socklen_t) info->ai_addrlen);
+        freeaddrinfo (info);
+
+        bool retval = (result >= 0);
+
+        if (result < 0)
+        {
+           #if JUCE_WINDOWS
+            if (result == SOCKET_ERROR && WSAGetLastError() == WSAEWOULDBLOCK)
+           #else
+            if (errno == EINPROGRESS)
+           #endif
+            {
+                if (waitForReadiness (handle, readLock, false, timeOutMillisecs) == 1)
+                    retval = true;
+            }
+        }
+
+        setSocketBlockingState (handle, true);
+
+        if (retval)
+            resetSocketOptions (handle, false, false);
+
+        return retval;
     }
 
     static void makeReusable (int handle) noexcept

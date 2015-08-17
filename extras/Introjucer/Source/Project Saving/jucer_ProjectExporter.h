@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2013 - Raw Material Software Ltd.
+   Copyright (c) 2015 - ROLI Ltd.
 
    Permission is granted to use this software under the terms of either:
    a) the GPL v2 (or any later version)
@@ -22,12 +22,14 @@
   ==============================================================================
 */
 
-#ifndef __JUCER_PROJECTEXPORTER_JUCEHEADER__
-#define __JUCER_PROJECTEXPORTER_JUCEHEADER__
+#ifndef JUCER_PROJECTEXPORTER_H_INCLUDED
+#define JUCER_PROJECTEXPORTER_H_INCLUDED
 
 #include "../jucer_Headers.h"
 #include "../Project/jucer_Project.h"
 #include "../Project/jucer_ProjectType.h"
+#include "../Application/jucer_GlobalPreferences.h"
+
 class ProjectSaver;
 
 //==============================================================================
@@ -68,10 +70,11 @@ public:
     virtual int getVisualStudioVersion() const  { return 0; }
     virtual bool isCodeBlocksWindows() const    { return false; }
     virtual bool isCodeBlocksLinux() const      { return false; }
+    virtual bool isLinuxMakefile() const        { return false; }
 
     virtual bool isAndroid() const              { return false; }
     virtual bool isWindows() const              { return false; }
-    virtual bool isLinuxMakefile() const        { return false; }
+    virtual bool isLinux() const                { return false; }
     virtual bool isOSX() const                  { return false; }
 
     bool mayCompileOnCurrentOS() const
@@ -81,7 +84,7 @@ public:
        #elif JUCE_WINDOWS
         return isWindows() || isAndroid();
        #elif JUCE_LINUX
-        return isLinuxMakefile() || isCodeBlocksLinux() || isAndroid();
+        return isLinux() || isAndroid();
        #else
         #error
        #endif
@@ -111,6 +114,10 @@ public:
 
     Value getUserNotes()                        { return getSetting (Ids::userNotes); }
 
+    Value getVSTPathValue (bool isVST3) const   { return isVST3 ? vst3Path : vst2Path; }
+    Value getRTASPathValue() const              { return rtasPath; }
+    Value getAAXPathValue() const               { return aaxPath; }
+
     // NB: this is the path to the parent "modules" folder that contains the named module, not the
     // module folder itself.
     Value getPathForModuleValue (const String& moduleID);
@@ -121,7 +128,7 @@ public:
     String getLegacyModulePath() const;
 
     // Returns a path to the actual module folder itself
-    RelativePath getModuleFolderRelativeToProject (const String& moduleID, ProjectSaver& projectSaver) const;
+    RelativePath getModuleFolderRelativeToProject (const String& moduleID) const;
     void updateOldModulePaths();
 
     RelativePath rebaseFromProjectFolderToBuildTarget (const RelativePath& path) const;
@@ -173,7 +180,7 @@ public:
     //==============================================================================
     String makefileTargetSuffix;
     bool makefileIsDLL;
-    StringArray linuxLibs;
+    StringArray linuxLibs, makefileExtraLinkerFlags;
 
     //==============================================================================
     String msvcTargetSuffix;
@@ -326,6 +333,7 @@ protected:
     const ProjectType& projectType;
     const String projectName;
     const File projectFolder;
+    Value vst2Path, vst3Path, rtasPath, aaxPath; // these must be initialised in the specific exporter c'tors!
 
     mutable Array<Project::Item> itemGroups;
     void initItemGroups() const;
@@ -387,4 +395,4 @@ private:
 };
 
 
-#endif   // __JUCER_PROJECTEXPORTER_JUCEHEADER__
+#endif   // JUCER_PROJECTEXPORTER_H_INCLUDED

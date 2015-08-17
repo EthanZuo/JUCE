@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2013 - Raw Material Software Ltd.
+   Copyright (c) 2015 - ROLI Ltd.
 
    Permission is granted to use this software under the terms of either:
    a) the GPL v2 (or any later version)
@@ -33,6 +33,8 @@ public:
 
         projectGUID = createGUID (project.getProjectUID());
         updateOldSettings();
+
+        initialiseDependencyPathValues();
     }
 
     //==============================================================================
@@ -291,8 +293,7 @@ protected:
     {
         StringArray searchPaths (extraSearchPaths);
         searchPaths.addArray (config.getHeaderSearchPaths());
-        searchPaths.removeDuplicates (false);
-        return searchPaths;
+        return getCleanedStringArray (searchPaths);
     }
 
     virtual String createConfigName (const BuildConfiguration& config) const
@@ -554,6 +555,33 @@ protected:
     {
         return FileHelpers::isAbsolutePath (filename) ? filename
                                                       : (".\\" + filename);
+    }
+
+    void initialiseDependencyPathValues()
+    {
+        vst2Path.referTo (Value (new DependencyPathValueSource (
+             getSetting (Ids::vstFolder),
+             DependencyPath::vst2KeyName,
+             DependencyPath::windows
+        )));
+
+        vst3Path.referTo (Value (new DependencyPathValueSource (
+             getSetting (Ids::vst3Folder),
+             DependencyPath::vst3KeyName,
+             DependencyPath::windows
+        )));
+
+        aaxPath.referTo (Value (new DependencyPathValueSource (
+             getSetting (Ids::aaxFolder),
+             DependencyPath::aaxKeyName,
+             DependencyPath::windows
+        )));
+
+        rtasPath.referTo (Value (new DependencyPathValueSource (
+             getSetting (Ids::rtasFolder),
+             DependencyPath::rtasKeyName,
+             DependencyPath::windows
+        )));
     }
 
     JUCE_DECLARE_NON_COPYABLE (MSVCProjectExporterBase)

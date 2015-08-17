@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2013 - Raw Material Software Ltd.
+   Copyright (c) 2015 - ROLI Ltd.
 
    Permission is granted to use this software under the terms of either:
    a) the GPL v2 (or any later version)
@@ -520,6 +520,10 @@ public:
                                                 | kAudioUnitParameterFlag_HasCFNameString
                                                 | kAudioUnitParameterFlag_ValuesHaveStrings);
 
+           #if JucePlugin_AUHighResolutionParameters
+            outParameterInfo.flags |= (UInt32) kAudioUnitParameterFlag_IsHighResolution;
+           #endif
+
             const String name (juceFilter->getParameterName (index));
 
             // set whether the param is automatable (unnamed parameters aren't allowed to be automated)
@@ -658,11 +662,9 @@ public:
                                     &outCurrentSampleInTimeLine,
                                     &looping,
                                     &outCycleStartBeat,
-                                    &outCycleEndBeat) != noErr
-             || getHostType().isLogic())
+                                    &outCycleEndBeat) != noErr)
         {
-            // If the host doesn't support this callback (or if it's Logic, which has a bug),
-            // then fallback to using the sample time from lastTimeStamp:
+            // If the host doesn't support this callback, then use the sample time from lastTimeStamp:
             outCurrentSampleInTimeLine = lastTimeStamp.mSampleTime;
         }
 
@@ -701,6 +703,10 @@ public:
         PropertyChanged (kAudioUnitProperty_Latency,       kAudioUnitScope_Global, 0);
         PropertyChanged (kAudioUnitProperty_ParameterList, kAudioUnitScope_Global, 0);
         PropertyChanged (kAudioUnitProperty_ParameterInfo, kAudioUnitScope_Global, 0);
+
+        refreshCurrentPreset();
+
+        PropertyChanged (kAudioUnitProperty_PresentPreset, kAudioUnitScope_Global, 0);
     }
 
     bool StreamFormatWritable (AudioUnitScope, AudioUnitElement) override
@@ -1003,6 +1009,8 @@ public:
 
            #if ! JucePlugin_SilenceInProducesSilenceOut
             ioActionFlags &= (AudioUnitRenderActionFlags) ~kAudioUnitRenderAction_OutputIsSilence;
+           #else
+            ignoreUnused (ioActionFlags);
            #endif
         }
 
@@ -1344,6 +1352,21 @@ private:
             CFRelease (presetsArray.getReference(i).presetName);
 
         presetsArray.clear();
+    }
+
+    void refreshCurrentPreset()
+    {
+        // this will make the AU host re-read and update the current preset name
+        // in case it was changed here in the plug-in:
+
+        const int currentProgramNumber = juceFilter->getCurrentProgram();
+        const String currentProgramName = juceFilter->getProgramName (currentProgramNumber);
+
+        AUPreset currentPreset;
+        currentPreset.presetNumber = currentProgramNumber;
+        currentPreset.presetName = currentProgramName.toCFString();
+
+        SetAFactoryPresetAsCurrent (currentPreset);
     }
 
     JUCE_DECLARE_NON_COPYABLE (JuceAU)

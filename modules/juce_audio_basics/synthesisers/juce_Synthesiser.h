@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2013 - Raw Material Software Ltd.
+   Copyright (c) 2015 - ROLI Ltd.
 
    Permission is granted to use this software under the terms of either:
    a) the GPL v2 (or any later version)
@@ -214,8 +214,17 @@ public:
     */
     bool isKeyDown() const noexcept                             { return keyIsDown; }
 
+    /** Returns true if the sustain pedal is currently active for this voice. */
+    bool isSustainPedalDown() const noexcept                    { return sustainPedalDown; }
+
     /** Returns true if the sostenuto pedal is currently active for this voice. */
     bool isSostenutoPedalDown() const noexcept                  { return sostenutoPedalDown; }
+
+    /** Returns true if a voice is sounding in its release phase **/
+    bool isPlayingButReleased() const noexcept
+    {
+        return isVoiceActive() && ! (isKeyDown() || isSostenutoPedalDown() || isSustainPedalDown());
+    }
 
     /** Returns true if this voice started playing its current note before the other voice did. */
     bool wasStartedBefore (const SynthesiserVoice& other) const noexcept;
@@ -244,7 +253,7 @@ private:
     int currentlyPlayingNote, currentPlayingMidiChannel;
     uint32 noteOnTime;
     SynthesiserSound::Ptr currentlyPlayingSound;
-    bool keyIsDown, sostenutoPedalDown;
+    bool keyIsDown, sustainPedalDown, sostenutoPedalDown;
 
    #if JUCE_CATCH_DEPRECATED_CODE_MISUSE
     // Note the new parameters for this method.
@@ -562,7 +571,6 @@ protected:
                                                 int midiNoteNumber) const;
 
     /** Starts a specified voice playing a particular sound.
-
         You'll probably never need to call this, it's used internally by noteOn(), but
         may be needed by subclasses for custom behaviours.
     */
@@ -571,6 +579,13 @@ protected:
                      int midiChannel,
                      int midiNoteNumber,
                      float velocity);
+
+    /** Stops a given voice.
+        You should never need to call this, it's used internally by noteOff, but is protected
+        in case it's useful for some custom subclasses. It basically just calls through to
+        SynthesiserVoice::stopNote(), and has some assertions to sanity-check a few things.
+    */
+    void stopVoice (SynthesiserVoice*, float velocity, bool allowTailOff);
 
     /** Can be overridden to do custom handling of incoming midi events. */
     virtual void handleMidiEvent (const MidiMessage&);
@@ -582,8 +597,6 @@ private:
     int minimumSubBlockSize;
     bool shouldStealNotes;
     BigInteger sustainPedalsDown;
-
-    void stopVoice (SynthesiserVoice*, float velocity, bool allowTailOff);
 
    #if JUCE_CATCH_DEPRECATED_CODE_MISUSE
     // Note the new parameters for these methods.

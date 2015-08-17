@@ -2,7 +2,7 @@
   ==============================================================================
 
    This file is part of the JUCE library.
-   Copyright (c) 2013 - Raw Material Software Ltd.
+   Copyright (c) 2015 - ROLI Ltd.
 
    Permission is granted to use this software under the terms of either:
    a) the GPL v2 (or any later version)
@@ -22,9 +22,10 @@
   ==============================================================================
 */
 
-#ifndef __JUCER_AUDIOPLUGINMODULE_JUCEHEADER__
-#define __JUCER_AUDIOPLUGINMODULE_JUCEHEADER__
+#ifndef JUCER_AUDIOPLUGINMODULE_H_INCLUDED
+#define JUCER_AUDIOPLUGINMODULE_H_INCLUDED
 
+#include "../Application/jucer_GlobalPreferences.h"
 
 //==============================================================================
 namespace
@@ -227,15 +228,9 @@ namespace
 //==============================================================================
 namespace VSTHelpers
 {
-    static Value getVSTFolder (ProjectExporter& exporter, bool isVST3)
-    {
-        return exporter.getSetting (isVST3 ? Ids::vst3Folder
-                                           : Ids::vstFolder);
-    }
-
     static void addVSTFolderToPath (ProjectExporter& exporter, bool isVST3)
     {
-        const String vstFolder (getVSTFolder (exporter, isVST3).toString());
+        const String vstFolder (exporter.getVSTPathValue (isVST3).toString());
 
         if (vstFolder.isNotEmpty())
         {
@@ -243,7 +238,7 @@ namespace VSTHelpers
 
             if (exporter.isVisualStudio())
                 exporter.extraSearchPaths.add (path.toWindowsStyle());
-            else if (exporter.isLinuxMakefile() || exporter.isCodeBlocksLinux() || exporter.isXcode())
+            else if (exporter.isLinux() || exporter.isXcode())
                 exporter.extraSearchPaths.insert (0, path.toUnixStyle());
         }
     }
@@ -252,22 +247,14 @@ namespace VSTHelpers
     {
         const String vstFormat (isVST3 ? "VST3" : "VST");
 
-        props.add (new TextPropertyComponent (getVSTFolder (exporter, isVST3), vstFormat + " Folder", 1024, false),
+        props.add (new DependencyPathPropertyComponent (exporter.getVSTPathValue (isVST3),
+                                                        vstFormat + " Folder"),
                    "If you're building a " + vstFormat + ", this must be the folder containing the " + vstFormat + " SDK. This should be an absolute path.");
-    }
-
-    static void fixMissingVSTValues (ProjectExporter& exporter, bool isVST3)
-    {
-        if (getVSTFolder (exporter, isVST3).toString().isEmpty())
-            getVSTFolder (exporter, isVST3) = exporter.isWindows() ? (isVST3 ? "c:\\SDKs\\VST3 SDK" : "c:\\SDKs\\vstsdk2.4")
-                                                                   : (isVST3 ? "~/SDKs/VST3 SDK"    : "~/SDKs/vstsdk2.4");
-
-        fixMissingXcodePostBuildScript (exporter);
     }
 
     static inline void prepareExporter (ProjectExporter& exporter, ProjectSaver& projectSaver, bool isVST3)
     {
-        fixMissingVSTValues (exporter, isVST3);
+        fixMissingXcodePostBuildScript (exporter);
         writePluginCharacteristicsFile (projectSaver);
 
         exporter.makefileTargetSuffix = ".so";
@@ -282,7 +269,7 @@ namespace VSTHelpers
 
         if (exporter.isWindows())
             exporter.extraSearchPaths.add (juceWrapperFolder.toWindowsStyle());
-        else if (exporter.isLinuxMakefile() || exporter.isCodeBlocksLinux() )
+        else if (exporter.isLinux())
             exporter.extraSearchPaths.add (juceWrapperFolder.toUnixStyle());
 
         if (exporter.isVisualStudio())
@@ -305,11 +292,14 @@ namespace VSTHelpers
                         config->getValue (Ids::postbuildCommand) = "copy /Y \"$(OutDir)\\$(TargetFileName)\" \"$(OutDir)\\$(TargetName).vst3\"";
             }
         }
+
+        if (exporter.isLinux())
+            exporter.makefileExtraLinkerFlags.add ("-Wl,--no-undefined");
     }
 
     static inline void createPropertyEditors (ProjectExporter& exporter, PropertyListBuilder& props, bool isVST3)
     {
-        fixMissingVSTValues (exporter, isVST3);
+        fixMissingXcodePostBuildScript (exporter);
         createVSTPathEditor (exporter, props, isVST3);
     }
 }
@@ -317,28 +307,19 @@ namespace VSTHelpers
 //==============================================================================
 namespace RTASHelpers
 {
-    static Value getRTASFolder (ProjectExporter& exporter)             { return exporter.getSetting (Ids::rtasFolder); }
-    static RelativePath getRTASFolderPath (ProjectExporter& exporter)  { return RelativePath (exporter.getSettingString (Ids::rtasFolder),
-                                                                                              RelativePath::projectFolder); }
-
-    static bool isExporterSupported (ProjectExporter& exporter)   { return exporter.isVisualStudio() || exporter.isXcode(); }
-
-    static void fixMissingRTASValues (ProjectExporter& exporter)
+    static RelativePath getRTASRelativeFolderPath (ProjectExporter& exporter)
     {
-        if (getRTASFolder (exporter).toString().isEmpty())
-        {
-            if (exporter.isVisualStudio())
-                getRTASFolder (exporter) = "c:\\SDKs\\PT_80_SDK";
-            else
-                getRTASFolder (exporter) = "~/SDKs/PT_80_SDK";
-        }
+        return RelativePath (exporter.getRTASPathValue().toString(), RelativePath::projectFolder);
+    }
 
-        fixMissingXcodePostBuildScript (exporter);
+    static bool isExporterSupported (ProjectExporter& exporter)
+    {
+        return exporter.isVisualStudio() || exporter.isXcode();
     }
 
     static void addExtraSearchPaths (ProjectExporter& exporter)
     {
-        RelativePath rtasFolder (getRTASFolderPath (exporter));
+        RelativePath rtasFolder (getRTASRelativeFolderPath (exporter));
 
         if (exporter.isVisualStudio())
         {
@@ -421,9 +402,9 @@ namespace RTASHelpers
     {
         if (isExporterSupported (exporter))
         {
-            fixMissingRTASValues (exporter);
+            fixMissingXcodePostBuildScript (exporter);
 
-            const RelativePath rtasFolder (getRTASFolderPath (exporter));
+            const RelativePath rtasFolder (getRTASRelativeFolderPath (exporter));
 
             if (exporter.isVisualStudio())
             {
@@ -476,9 +457,10 @@ namespace RTASHelpers
     {
         if (isExporterSupported (exporter))
         {
-            fixMissingRTASValues (exporter);
+            fixMissingXcodePostBuildScript (exporter);
 
-            props.add (new TextPropertyComponent (getRTASFolder (exporter), "RTAS Folder", 1024, false),
+            props.add (new DependencyPathPropertyComponent (exporter.getRTASPathValue(),
+                                                            "RTAS Folder"),
                        "If you're building an RTAS, this must be the folder containing the RTAS SDK. This should be an absolute path.");
         }
     }
@@ -612,28 +594,19 @@ namespace AUHelpers
 //==============================================================================
 namespace AAXHelpers
 {
-    static Value getAAXFolder (ProjectExporter& exporter)             { return exporter.getSetting (Ids::aaxFolder); }
-    static RelativePath getAAXFolderPath (ProjectExporter& exporter)  { return RelativePath (exporter.getSettingString (Ids::aaxFolder),
-                                                                                             RelativePath::projectFolder); }
-
-    static bool isExporterSupported (ProjectExporter& exporter)       { return exporter.isVisualStudio() || exporter.isXcode(); }
-
-    static void fixMissingAAXValues (ProjectExporter& exporter)
+    static RelativePath getAAXRelativeFolderPath (ProjectExporter& exporter)
     {
-        if (getAAXFolder (exporter).toString().isEmpty())
-        {
-            if (exporter.isVisualStudio())
-                getAAXFolder (exporter) = "c:\\SDKs\\AAX";
-            else
-                getAAXFolder (exporter) = "~/SDKs/AAX";
-        }
+        return RelativePath (exporter.getAAXPathValue().toString(), RelativePath::projectFolder);
+    }
 
-        fixMissingXcodePostBuildScript (exporter);
+    static bool isExporterSupported (ProjectExporter& exporter)
+    {
+        return exporter.isVisualStudio() || exporter.isXcode();
     }
 
     static void addExtraSearchPaths (ProjectExporter& exporter)
     {
-        const RelativePath aaxFolder (getAAXFolderPath (exporter));
+        const RelativePath aaxFolder (getAAXRelativeFolderPath (exporter));
 
         exporter.addToExtraSearchPaths (aaxFolder);
         exporter.addToExtraSearchPaths (aaxFolder.getChildFile ("Interfaces"));
@@ -644,9 +617,9 @@ namespace AAXHelpers
     {
         if (isExporterSupported (exporter))
         {
-            fixMissingAAXValues (exporter);
+            fixMissingXcodePostBuildScript (exporter);
 
-            const RelativePath aaxLibsFolder (getAAXFolderPath (exporter).getChildFile ("Libs"));
+            const RelativePath aaxLibsFolder (getAAXRelativeFolderPath (exporter).getChildFile ("Libs"));
 
             if (exporter.isVisualStudio())
             {
@@ -673,12 +646,13 @@ namespace AAXHelpers
     {
         if (isExporterSupported (exporter))
         {
-            fixMissingAAXValues (exporter);
+            fixMissingXcodePostBuildScript (exporter);
 
-            props.add (new TextPropertyComponent (getAAXFolder (exporter), "AAX SDK Folder", 1024, false),
+            props.add (new DependencyPathPropertyComponent (exporter.getAAXPathValue(),
+                                                            "AAX SDK Folder"),
                        "If you're building an AAX, this must be the folder containing the AAX SDK. This should be an absolute path.");
         }
     }
 }
 
-#endif   // __JUCER_AUDIOPLUGINMODULE_JUCEHEADER__
+#endif   // JUCER_AUDIOPLUGINMODULE_H_INCLUDED
