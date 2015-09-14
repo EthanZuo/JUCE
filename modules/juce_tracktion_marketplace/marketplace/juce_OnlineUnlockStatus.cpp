@@ -32,7 +32,7 @@ struct KeyFileUtils
     static String encryptXML (const XmlElement& xml, RSAKey privateKey)
     {
         MemoryOutputStream text;
-        text << xml.createDocument (String::empty, true);
+        text << xml.createDocument (StringRef(), true);
 
         BigInteger val;
         val.loadFromMemoryBlock (text.getMemoryBlock());
@@ -50,7 +50,7 @@ struct KeyFileUtils
 
         StringArray lines;
         lines.add (comment);
-        lines.add (String::empty);
+        lines.add (String());
 
         const int charsPerLine = 70;
         while (asHex.length() > 0)
@@ -59,7 +59,7 @@ struct KeyFileUtils
             asHex = asHex.substring (charsPerLine);
         }
 
-        lines.add (String::empty);
+        lines.add (String());
 
         return lines.joinIntoString ("\r\n");
     }
@@ -78,7 +78,11 @@ struct KeyFileUtils
         if (! val.isZero())
         {
             key.applyToValue (val);
-            xml = XmlDocument::parse (val.toMemoryBlock().toString());
+
+            const MemoryBlock mb (val.toMemoryBlock());
+
+            if (CharPointer_UTF8::isValidString (static_cast<const char*> (mb.getData()), (int) mb.getSize()))
+                xml = XmlDocument::parse (mb.toString());
         }
 
         return xml != nullptr ? *xml : XmlElement("key");
@@ -92,7 +96,7 @@ struct KeyFileUtils
     static StringArray getMachineNumbers (XmlElement xml)
     {
         StringArray numbers;
-        numbers.addTokens (xml.getStringAttribute ("mach"), ",; ", String::empty);
+        numbers.addTokens (xml.getStringAttribute ("mach"), ",; ", StringRef());
         numbers.trim();
         numbers.removeEmptyStrings();
         return numbers;
@@ -198,54 +202,67 @@ void OnlineUnlockStatus::save()
     saveState (mo.getMemoryBlock().toBase64Encoding());
 }
 
-static String getEncodedIDString (const String& input)
+char OnlineUnlockStatus::MachineIDUtilities::getPlatformPrefix()
 {
-    static const char* const platform =
-       #if JUCE_MAC
-        "M";
-       #elif JUCE_WINDOWS
-        "W";
-       #elif JUCE_LINUX
-        "L";
-       #elif JUCE_IOS
-        "I";
-       #elif JUCE_ANDROID
-        "A";
-       #endif
+   #if JUCE_MAC
+    return 'M';
+   #elif JUCE_WINDOWS
+    return 'W';
+   #elif JUCE_LINUX
+    return 'L';
+   #elif JUCE_IOS
+    return 'I';
+   #elif JUCE_ANDROID
+    return 'A';
+   #endif
+}
+
+String OnlineUnlockStatus::MachineIDUtilities::getEncodedIDString (const String& input)
+{
+    const String platform (String::charToString (getPlatformPrefix()));
 
     return platform + MD5 ((input + "salt_1" + platform).toUTF8())
                         .toHexString().substring (0, 9).toUpperCase();
 }
 
-StringArray OnlineUnlockStatus::getLocalMachineIDs()
+bool OnlineUnlockStatus::MachineIDUtilities::addFileIDToList (StringArray& ids, const File& f)
 {
-    StringArray nums;
-
-    // First choice for an ID number is a filesystem ID for the user's home
-    // folder or windows directory.
-
-   #if JUCE_WINDOWS
-    uint64 num = File::getSpecialLocation (File::windowsSystemDirectory).getFileIdentifier();
-   #else
-    uint64 num = File ("~").getFileIdentifier();
-   #endif
-
-    if (num != 0)
+    if (uint64 num = f.getFileIdentifier())
     {
-        nums.add (getEncodedIDString (String::toHexString ((int64) num)));
-        return nums;
+        ids.add (getEncodedIDString (String::toHexString ((int64) num)));
+        return true;
     }
 
-    // ..if that fails, use the MAC addresses..
+    return false;
+}
 
+void OnlineUnlockStatus::MachineIDUtilities::addMACAddressesToList (StringArray& ids)
+{
     Array<MACAddress> addresses;
     MACAddress::findAllAddresses (addresses);
 
     for (int i = 0; i < addresses.size(); ++i)
-        nums.add (getEncodedIDString (addresses[i].toString()));
+        ids.add (getEncodedIDString (addresses.getReference(i).toString()));
+}
 
-    jassert (nums.size() > 0); // failed to create any IDs!
-    return nums;
+StringArray OnlineUnlockStatus::getLocalMachineIDs()
+{
+    StringArray ids;
+
+    // First choice for an ID number is a filesystem ID for the user's home
+    // folder or windows directory.
+   #if JUCE_WINDOWS
+    MachineIDUtilities::addFileIDToList (ids, File::getSpecialLocation (File::windowsSystemDirectory));
+   #else
+    MachineIDUtilities::addFileIDToList (ids, File ("~"));
+   #endif
+
+    // ..if that fails, use the MAC addresses..
+    if (ids.size() == 0)
+        MachineIDUtilities::addMACAddressesToList (ids);
+
+    jassert (ids.size() > 0); // failed to create any IDs!
+    return ids;
 }
 
 void OnlineUnlockStatus::setUserEmail (const String& usernameOrEmail)
