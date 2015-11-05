@@ -48,3 +48,6 @@ profile
 **/CodeBlocks/*.depend
 **/CodeBlocks/*.layout
 doxygen/doc
+
+BinaryData.*
+*.wav

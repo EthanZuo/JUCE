@@ -166,8 +166,8 @@ struct SynthAudioSource  : public AudioSource
     {
         WavAudioFormat wavFormat;
 
-        ScopedPointer<AudioFormatReader> audioReader (wavFormat.createReaderFor (new MemoryInputStream (BinaryData::cello_wav,
-                                                                                                        BinaryData::cello_wavSize,
+        ScopedPointer<AudioFormatReader> audioReader (wavFormat.createReaderFor (new MemoryInputStream (BinaryData::cello_3_wav,
+                                                                                                        BinaryData::cello_3_wavSize,
                                                                                                         false),
                                                                                  true));
 
@@ -178,7 +178,7 @@ struct SynthAudioSource  : public AudioSource
         synth.addSound (new SamplerSound ("demo sound",
                                           *audioReader,
                                           allNotes,
-                                          74,   // root midi note
+                                          72,   // root midi note
                                           0.1,  // attack time
                                           0.1,  // release time
                                           10.0  // maximum sample length
@@ -241,6 +241,8 @@ public:
           keyboardComponent (keyboardState, MidiKeyboardComponent::horizontalKeyboard)
     {
         addAndMakeVisible (keyboardComponent);
+		keyboardComponent.setAvailableRange(60, 84);
+		keyboardComponent.setKeyWidth(624/17);
 
         addAndMakeVisible (sineButton);
         sineButton.setButtonText ("Use sine wave");
