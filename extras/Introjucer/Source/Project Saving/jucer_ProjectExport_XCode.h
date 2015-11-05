@@ -26,7 +26,7 @@ namespace
 {
     const char* const osxVersionDefault         = "default";
     const int oldestSDKVersion  = 5;
-    const int currentSDKVersion = 10;
+    const int currentSDKVersion = 11;
 
     const char* const osxArch_Default           = "default";
     const char* const osxArch_Native            = "Native";
@@ -166,8 +166,8 @@ protected:
     class XcodeBuildConfiguration  : public BuildConfiguration
     {
     public:
-        XcodeBuildConfiguration (Project& p, const ValueTree& t, const bool isIOS)
-            : BuildConfiguration (p, t), iOS (isIOS)
+        XcodeBuildConfiguration (Project& p, const ValueTree& t, const bool isIOS, const ProjectExporter& e)
+            : BuildConfiguration (p, t, e), iOS (isIOS)
         {
             if (iOS)
             {
@@ -296,7 +296,7 @@ protected:
 
     BuildConfiguration::Ptr createBuildConfig (const ValueTree& v) const override
     {
-        return new XcodeBuildConfiguration (project, v, iOS);
+        return new XcodeBuildConfiguration (project, v, iOS, *this);
     }
 
 private:
@@ -643,6 +643,7 @@ private:
 
                     addPlistDictionaryKey (dict2, "CFBundleTypeName", ex);
                     addPlistDictionaryKey (dict2, "CFBundleTypeRole", "Editor");
+                    addPlistDictionaryKey (dict2, "CFBundleTypeIconFile", "Icon");
                     addPlistDictionaryKey (dict2, "NSPersistentStoreTypeKey", "XML");
                 }
 
@@ -1120,7 +1121,7 @@ private:
         return "file" + file.getFileExtension();
     }
 
-    String addFile (const RelativePath& path, bool shouldBeCompiled, bool shouldBeAddedToBinaryResources, bool inhibitWarnings) const
+    String addFile (const RelativePath& path, bool shouldBeCompiled, bool shouldBeAddedToBinaryResources, bool shouldBeAddedToXcodeResources, bool inhibitWarnings) const
     {
         const String pathAsString (path.toUnixStyle());
         const String refID (addFileReference (path.toUnixStyle()));
@@ -1132,11 +1133,11 @@ private:
             else
                 addBuildFile (pathAsString, refID, true, inhibitWarnings);
         }
-        else if (! shouldBeAddedToBinaryResources)
+        else if (! shouldBeAddedToBinaryResources || shouldBeAddedToXcodeResources)
         {
             const String fileType (getFileType (path));
 
-            if (fileType.startsWith ("image.") || fileType.startsWith ("text.") || fileType.startsWith ("file."))
+            if (shouldBeAddedToXcodeResources || fileType.startsWith ("image.") || fileType.startsWith ("text.") || fileType.startsWith ("file."))
             {
                 resourceIDs.add (addBuildFile (pathAsString, refID, false, false));
                 resourceFileRefs.add (refID);
@@ -1174,6 +1175,7 @@ private:
 
             return addFile (path, projectItem.shouldBeCompiled(),
                             projectItem.shouldBeAddedToBinaryResources(),
+                            projectItem.shouldBeAddedToXcodeResources(),
                             projectItem.shouldInhibitWarnings());
         }
 
@@ -1415,8 +1417,8 @@ private:
         const char* extent;
         const char* scale;
         const char* filename;
-        const int   width;
-        const int   height;
+        int width;
+        int height;
     };
 
     static Array<ImageType> getiOSLaunchImageTypes()
@@ -1566,16 +1568,9 @@ private:
 
     void initialiseDependencyPathValues()
     {
-        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder),
-                                                                Ids::vst2Path, TargetOS::osx)));
-
-        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder),
-                                                                Ids::vst3Path, TargetOS::osx)));
-
-        aaxPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder),
-                                                               Ids::aaxPath, TargetOS::osx)));
-
-        rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder),
-                                                                Ids::rtasPath, TargetOS::osx)));
+        vst2Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vstFolder),  Ids::vst2Path, TargetOS::osx)));
+        vst3Path.referTo (Value (new DependencyPathValueSource (getSetting (Ids::vst3Folder), Ids::vst3Path, TargetOS::osx)));
+        aaxPath. referTo (Value (new DependencyPathValueSource (getSetting (Ids::aaxFolder),  Ids::aaxPath,  TargetOS::osx)));
+        rtasPath.referTo (Value (new DependencyPathValueSource (getSetting (Ids::rtasFolder), Ids::rtasPath, TargetOS::osx)));
     }
 };
